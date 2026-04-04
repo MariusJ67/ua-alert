@@ -91,6 +91,43 @@ def fetch_all_apps(start_date: str, end_date: str) -> pd.DataFrame:
     return combined.reset_index(drop=True)
 
 
+def fetch_creative_breakdown(app_token: str, result_metric: str,
+                             campaign: str, adgroup: str,
+                             start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Fetch creative-level data for a specific adgroup over a date range.
+    """
+    headers = {
+        "Authorization": f"Bearer {ADJUST_API_TOKEN}",
+        "Accept": "application/json",
+    }
+    params = {
+        "date_period": f"{start_date}:{end_date}",
+        "dimensions": "campaign,adgroup,creative,day",
+        "metrics": f"cost,installs,{result_metric}",
+        "utc_offset": "+00:00",
+        "currency": "USD",
+        "app_token__in": app_token,
+    }
+    response = requests.get(ADJUST_BASE_URL, headers=headers, params=params)
+    if response.status_code != 200:
+        raise Exception(f"Adjust API error {response.status_code}: {response.text[:300]}")
+
+    rows = response.json().get("rows", [])
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+
+    df.rename(columns={result_metric: "result"}, inplace=True)
+    for col in ["cost", "installs", "result"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    df["day"] = pd.to_datetime(df["day"]).dt.date
+
+    # Filter to the specific adgroup
+    df = df[(df["campaign"] == campaign) & (df["adgroup"] == adgroup)]
+    return df.reset_index(drop=True)
+
+
 def fetch_last_two_days() -> pd.DataFrame:
     """
     Fetch 3 days of data (J-3 to J-1) to account for Adjust's ~1 day spend reporting delay.

@@ -159,6 +159,28 @@
     .adgroup-chart-wrap.open { display: block; }
     .chart-loading { font-size: 12px; color: var(--muted); }
 
+    /* Creative breakdown */
+    .creative-wrap {
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: none;
+    }
+    .creative-wrap.open { display: block; }
+    .creative-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    .creative-table th {
+      text-align: left; color: var(--muted); font-size: 11px;
+      text-transform: uppercase; padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .creative-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .creative-table tr:last-child td { border-bottom: none; }
+    .creative-table tr.spike-critical td:first-child { border-left: 3px solid var(--red); }
+    .creative-table tr.spike-high     td:first-child { border-left: 3px solid var(--orange); }
+    .creative-table tr.spike-medium   td:first-child { border-left: 3px solid var(--yellow); }
+    .creative-name { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .badge-new { font-size: 10px; background: rgba(96,165,250,0.2); color: var(--blue); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+    .badge-gone { font-size: 10px; background: rgba(123,127,150,0.2); color: var(--muted); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+
     /* Ads link */
     .ads-link {
       display: inline-block; margin-top: 8px;
@@ -375,10 +397,21 @@ function renderAlerts() {
                 onclick="toggleChart(this)">
                 📈 Tendance 7j
               </button>
+              <button class="btn-toggle" id="btn-crea-${chartId}"
+                data-wrap="crea-${chartId}"
+                data-app="${r.app.toLowerCase()}"
+                data-campaign="${encodeURIComponent(r.campaign)}"
+                data-adgroup="${encodeURIComponent(r.adgroup)}"
+                onclick="toggleCreatives(this)">
+                🎨 Analyser créas
+              </button>
             </div>
           </div>
         </div>
         <div class="adgroup-chart-wrap" id="${chartId}">
+          <div class="chart-loading">Chargement...</div>
+        </div>
+        <div class="creative-wrap" id="crea-${chartId}">
           <div class="chart-loading">Chargement...</div>
         </div>
       </div>
@@ -598,6 +631,107 @@ async function toggleChart(btn) {
         },
       },
     });
+
+  } catch (e) {
+    wrap.innerHTML = `<div class="chart-loading" style="color:var(--red)">Erreur: ${e.message}</div>`;
+  }
+}
+
+// ── Creative breakdown toggle ─────────────────────────────────────────────────
+const creativeLoaded = {};
+
+async function toggleCreatives(btn) {
+  const wrapId = btn.dataset.wrap;
+  const wrap = document.getElementById(wrapId);
+  const isOpen = wrap.classList.contains('open');
+
+  if (isOpen) {
+    wrap.classList.remove('open');
+    btn.classList.remove('active');
+    btn.textContent = '🎨 Analyser créas';
+    return;
+  }
+
+  wrap.classList.add('open');
+  btn.classList.add('active');
+  btn.textContent = '🎨 Fermer';
+
+  if (creativeLoaded[wrapId]) return;
+
+  const appName  = btn.dataset.app;
+  const campaign = decodeURIComponent(btn.dataset.campaign);
+  const adgroup  = decodeURIComponent(btn.dataset.adgroup);
+
+  wrap.innerHTML = '<div class="chart-loading"><div class="spinner"></div> Analyse des créas...</div>';
+
+  try {
+    const params = new URLSearchParams({ app: appName, campaign, adgroup });
+    const res = await fetch(`/api/creative_breakdown?${params}`);
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    const { creatives, dates, result_label } = data;
+
+    if (!creatives || creatives.length === 0) {
+      wrap.innerHTML = '<div class="chart-loading" style="color:var(--muted)">Pas de données créas disponibles.</div>';
+      return;
+    }
+
+    const spiked = creatives.filter(c => c.cpa_change_pct !== null && c.cpa_change_pct >= 25);
+
+    let html = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Créas dans cet adgroup — <strong style="color:var(--text)">${dates.today}</strong> vs ${dates.prev}
+        ${spiked.length > 0 ? `&nbsp;·&nbsp; <span style="color:var(--red);font-weight:600">${spiked.length} créa(s) en spike</span>` : ''}
+      </div>
+      <table class="creative-table">
+        <thead>
+          <tr>
+            <th>Créa</th>
+            <th>Spend hier</th>
+            <th>${result_label}</th>
+            <th>CPA hier</th>
+            <th>CPA avant-hier</th>
+            <th>Variation</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    for (const c of creatives) {
+      const pct = c.cpa_change_pct;
+      let rowClass = '';
+      let changeHtml = '<span style="color:var(--muted)">—</span>';
+
+      if (pct !== null) {
+        if (pct >= 75)      { rowClass = 'spike-critical'; changeHtml = `<span style="color:var(--red);font-weight:700">🔴 +${pct}%</span>`; }
+        else if (pct >= 50) { rowClass = 'spike-high';     changeHtml = `<span style="color:var(--orange);font-weight:700">🟠 +${pct}%</span>`; }
+        else if (pct >= 25) { rowClass = 'spike-medium';   changeHtml = `<span style="color:var(--yellow);font-weight:700">🟡 +${pct}%</span>`; }
+        else if (pct < 0)   {                               changeHtml = `<span style="color:var(--green)">${pct}%</span>`; }
+        else                {                               changeHtml = `<span style="color:var(--muted)">+${pct}%</span>`; }
+      }
+
+      const isNew  = c.cpa_yesterday === null && c.cost_today > 0;
+      const isGone = c.cpa_today === null && c.cost_yesterday > 0;
+      const newBadge  = isNew  ? '<span class="badge-new">NEW</span>'  : '';
+      const goneBadge = isGone ? '<span class="badge-gone">OFF</span>' : '';
+
+      const cpaTodayStr = c.cpa_today    ? `$${c.cpa_today.toFixed(2)}`    : '—';
+      const cpaPrevStr  = c.cpa_yesterday ? `$${c.cpa_yesterday.toFixed(2)}` : '—';
+
+      html += `<tr class="${rowClass}">
+        <td><span class="creative-name" title="${c.creative_full}">${c.creative_name}${newBadge}${goneBadge}</span></td>
+        <td>$${Math.round(c.cost_today || 0)}</td>
+        <td>${Math.round(c.result_today || 0)}</td>
+        <td><strong>${cpaTodayStr}</strong></td>
+        <td style="color:var(--muted)">${cpaPrevStr}</td>
+        <td>${changeHtml}</td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    creativeLoaded[wrapId] = true;
 
   } catch (e) {
     wrap.innerHTML = `<div class="chart-loading" style="color:var(--red)">Erreur: ${e.message}</div>`;
