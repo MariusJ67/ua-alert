@@ -1,6 +1,83 @@
+import re
 import pandas as pd
 from datetime import date, timedelta
 from config import CPA_ALERT_THRESHOLD, MIN_SPEND_FOR_ALERT
+
+
+def _extract_id(name: str):
+    """Extract the numeric/hash ID from a name like 'Campaign Name (12345)'."""
+    match = re.search(r'\(([a-zA-Z0-9_]+)\)\s*$', name)
+    return match.group(1) if match else None
+
+
+def _detect_network(campaign: str) -> str:
+    """Detect ad network from campaign name."""
+    c = campaign.upper()
+    if any(x in c for x in ["_META_", "_FCB_", "_META ", "META_"]):
+        return "meta"
+    if any(x in c for x in ["_GOOG_", "_GOOG ", "GOOG_"]):
+        return "google"
+    if any(x in c for x in ["_TIK_", "_TIKTOK_", "TIK_"]):
+        return "tiktok"
+    if any(x in c for x in ["_APPLO_", "APPLO_"]):
+        return "applovin"
+    if any(x in c for x in ["_ASA_", "_OWA_", "ASA_"]):
+        return "asa"
+    return "unknown"
+
+
+def build_network_url(campaign: str, adgroup: str) -> dict:
+    """Build a direct link to the ad manager for a given campaign/adgroup."""
+    network = _detect_network(campaign)
+    adgroup_id = _extract_id(adgroup)
+    campaign_id = _extract_id(campaign)
+
+    if network == "meta":
+        if adgroup_id:
+            url = f"https://adsmanager.facebook.com/adsmanager/manage/adsets?selected_adset_ids={adgroup_id}"
+        elif campaign_id:
+            url = f"https://adsmanager.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids={campaign_id}"
+        else:
+            url = "https://adsmanager.facebook.com/"
+        label = "Meta Ads Manager"
+        icon = "🔵"
+
+    elif network == "google":
+        if adgroup_id:
+            url = f"https://ads.google.com/aw/adgroups?adgroupId={adgroup_id}"
+        elif campaign_id:
+            url = f"https://ads.google.com/aw/campaigns?campaignId={campaign_id}"
+        else:
+            url = "https://ads.google.com/"
+        label = "Google Ads"
+        icon = "🔴"
+
+    elif network == "tiktok":
+        if adgroup_id:
+            url = f"https://ads.tiktok.com/i18n/perf/adgroup?adgroup_id={adgroup_id}"
+        elif campaign_id:
+            url = f"https://ads.tiktok.com/i18n/perf/campaign?campaignId={campaign_id}"
+        else:
+            url = "https://ads.tiktok.com/"
+        label = "TikTok Ads"
+        icon = "⚫"
+
+    elif network == "applovin":
+        url = "https://dash.applovin.com/o/mediation/ad_units/"
+        label = "AppLovin"
+        icon = "🟠"
+
+    elif network == "asa":
+        url = "https://app.searchads.apple.com/"
+        label = "Apple Search Ads"
+        icon = "⚪"
+
+    else:
+        url = None
+        label = None
+        icon = None
+
+    return {"url": url, "label": label, "icon": icon, "network": network}
 
 
 def compute_cpa(df: pd.DataFrame) -> pd.DataFrame:

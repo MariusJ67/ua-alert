@@ -142,6 +142,18 @@
       border-radius: 12px; padding: 24px;
     }
 
+    /* Ads link */
+    .ads-link {
+      display: inline-block; margin-top: 8px;
+      font-size: 12px; font-weight: 600;
+      color: var(--purple); text-decoration: none;
+      padding: 4px 10px; border-radius: 6px;
+      background: rgba(167,139,250,0.12);
+      border: 1px solid rgba(167,139,250,0.25);
+      transition: background 0.15s;
+    }
+    .ads-link:hover { background: rgba(167,139,250,0.25); }
+
     /* Loading */
     .spinner {
       display: inline-block; width: 16px; height: 16px;
@@ -333,6 +345,7 @@ function renderAlerts() {
       <div class="alert-cpa">
         <div class="cpa-change ${sev}">${emoji} +${pct}%</div>
         <div class="cpa-detail">$${r.cpa_yesterday.toFixed(2)} → $${r.cpa_today.toFixed(2)}</div>
+        ${r.network_link?.url ? `<a class="ads-link" href="${r.network_link.url}" target="_blank" rel="noopener">${r.network_link.icon} ${r.network_link.label} ↗</a>` : ''}
       </div>
     </div>`;
   }).join('');

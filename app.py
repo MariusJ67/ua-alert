@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, render_template
 from adjust_client import fetch_last_two_days, fetch_last_n_days
-from data_processor import compute_day_over_day, get_alerts, compute_cpa
+from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url
 from datetime import datetime
 
 app = Flask(__name__)
@@ -29,6 +29,10 @@ def api_alerts():
             "result_label", "cost_today", "result_today",
             "cpa_today", "cpa_yesterday", "cpa_change_pct_display"
         ]].to_dict(orient="records")
+
+        # Ajoute le lien vers l'ad manager pour chaque alerte
+        for row in alerts_list:
+            row["network_link"] = build_network_url(row["campaign"], row["adgroup"])
 
         dod_list = dod[[
             "app", "platform", "campaign", "adgroup",
