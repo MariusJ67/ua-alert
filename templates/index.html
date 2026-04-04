@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UA-Alert</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e8eaf0;
+      --muted: #7b7f96;
+      --red: #ef4444;
+      --orange: #f97316;
+      --yellow: #eab308;
+      --green: #22c55e;
+      --purple: #a78bfa;
+      --blue: #60a5fa;
+      --teal: #2dd4bf;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* Header */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 32px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo span { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo small { font-size: 13px; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .dates { font-size: 13px; color: var(--muted); }
+    .dates strong { color: var(--text); }
+    .btn-refresh {
+      background: var(--border); border: none; color: var(--text);
+      padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;
+      transition: background 0.2s;
+    }
+    .btn-refresh:hover { background: #3a3d4a; }
+    .btn-refresh.loading { opacity: 0.5; pointer-events: none; }
+
+    /* Main */
+    main { padding: 28px 32px; max-width: 1600px; margin: 0 auto; }
+
+    /* KPI cards */
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px;
+    }
+    .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 32px; font-weight: 700; margin-top: 6px; }
+    .kpi-value.red { color: var(--red); }
+    .kpi-value.green { color: var(--green); }
+
+    /* Section */
+    section { margin-bottom: 32px; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title { font-size: 16px; font-weight: 600; }
+
+    /* Filters */
+    .filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    select {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 8px 12px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; min-width: 140px;
+    }
+
+    /* Alert cards */
+    .alert-list { display: flex; flex-direction: column; gap: 10px; }
+    .alert-card {
+      border-radius: 10px; padding: 14px 18px;
+      border-left: 4px solid;
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+    }
+    .alert-card.critical { background: rgba(239,68,68,0.12); border-color: var(--red); }
+    .alert-card.high     { background: rgba(249,115,22,0.12); border-color: var(--orange); }
+    .alert-card.medium   { background: rgba(234,179,8,0.12);  border-color: var(--yellow); }
+
+    .alert-top { display: flex; align-items: center; gap-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+    .tag {
+      font-size: 11px; font-weight: 600; padding: 2px 8px;
+      border-radius: 4px; background: var(--border); color: var(--text);
+    }
+    .tag.ios  { background: rgba(96,165,250,0.2); color: var(--blue); }
+    .tag.and  { background: rgba(45,212,191,0.2); color: var(--teal); }
+    .adgroup-name { font-size: 13px; color: var(--muted); margin-top: 4px; font-family: monospace; }
+    .alert-cpa { text-align: right; white-space: nowrap; }
+    .cpa-change { font-size: 22px; font-weight: 700; }
+    .cpa-change.critical { color: var(--red); }
+    .cpa-change.high     { color: var(--orange); }
+    .cpa-change.medium   { color: var(--yellow); }
+    .cpa-detail { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .empty-state {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 32px; text-align: center; color: var(--green);
+      font-size: 15px;
+    }
+
+    /* Table */
+    .table-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: #22263a; padding: 12px 14px; text-align: left;
+      font-size: 11px; text-transform: uppercase; color: var(--muted);
+      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody td { padding: 11px 14px; }
+    .badge {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 4px;
+    }
+    .badge.ios  { background: rgba(96,165,250,0.2);  color: var(--blue); }
+    .badge.and  { background: rgba(45,212,191,0.2);  color: var(--teal); }
+    .change-cell { font-weight: 700; }
+    .change-cell.up-critical { color: var(--red); }
+    .change-cell.up-high     { color: var(--orange); }
+    .change-cell.up-medium   { color: var(--yellow); }
+    .change-cell.down        { color: var(--green); }
+
+    /* Chart */
+    .chart-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+    }
+
+    /* Loading */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid var(--border); border-top-color: var(--purple);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error */
+    .error-banner {
+      background: rgba(239,68,68,0.15); border: 1px solid var(--red);
+      border-radius: 10px; padding: 14px 18px; color: var(--red);
+      margin-bottom: 20px; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span>🚨 UA-Alert</span>
+    <small>Harmony · Stashcook · Unchaind</small>
+  </div>
+  <div class="header-right">
+    <div class="dates" id="dates">Chargement...</div>
+    <button class="btn-refresh" id="btnRefresh" onclick="loadData()">🔄 Refresh</button>
+  </div>
+</header>
+
+<main>
+  <div id="errorBanner" class="error-banner" style="display:none"></div>
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">Alertes actives</div>
+      <div class="kpi-value red" id="kpiAlerts">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Ad groups suivis</div>
+      <div class="kpi-value" id="kpiAdgroups">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Variation CPA moyenne</div>
+      <div class="kpi-value" id="kpiAvgChange">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Dernière mise à jour</div>
+      <div class="kpi-value" id="kpiUpdated" style="font-size:22px">—</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>App</label>
+      <select id="filterApp" onchange="renderAll()">
+        <option value="all">Toutes</option>
+        <option>Harmony</option>
+        <option>Stashcook</option>
+        <option>Unchaind</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Plateforme</label>
+      <select id="filterPlatform" onchange="renderAll()">
+        <option value="all">Toutes</option>
+        <option>iOS</option>
+        <option>Android</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Seuil alerte</label>
+      <select id="filterThreshold" onchange="renderAll()">
+        <option value="25">+25%</option>
+        <option value="50">+50%</option>
+        <option value="75">+75%</option>
+        <option value="10">+10%</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">🚨 Alertes CPA</div>
+    </div>
+    <div id="alertList"><div class="spinner"></div></div>
+  </section>
+
+  <!-- Table -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">📊 Tous les ad groups — J vs J-1</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>App</th>
+            <th>Plateforme</th>
+            <th>Ad Group</th>
+            <th>Metric</th>
+            <th>Spend ($)</th>
+            <th>Résultats</th>
+            <th>CPA aujourd'hui</th>
+            <th>CPA veille</th>
+            <th>Variation</th>
+          </tr>
+        </thead>
+        <tbody id="dodTable"><tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Trend chart -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">📈 Tendance CPA — 7 jours</div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="trendChart" height="100"></canvas>
+    </div>
+  </section>
+</main>
+
+<script>
+let alertsData = [];
+let dodData = [];
+let trendChart = null;
+
+function getFilters() {
+  return {
+    app: document.getElementById('filterApp').value,
+    platform: document.getElementById('filterPlatform').value,
+    threshold: parseInt(document.getElementById('filterThreshold').value),
+  };
+}
+
+function applyFilters(rows) {
+  const f = getFilters();
+  return rows.filter(r => {
+    if (f.app !== 'all' && r.app !== f.app) return false;
+    if (f.platform !== 'all' && r.platform !== f.platform) return false;
+    return true;
+  });
+}
+
+function platformBadge(p) {
+  const cls = p === 'iOS' ? 'ios' : 'and';
+  const icon = p === 'iOS' ? '🍎' : '🤖';
+  return `<span class="badge ${cls}">${icon} ${p}</span>`;
+}
+
+function changeClass(pct) {
+  if (pct >= 75) return 'up-critical';
+  if (pct >= 50) return 'up-high';
+  if (pct >= 25) return 'up-medium';
+  if (pct < 0)  return 'down';
+  return '';
+}
+
+function renderAlerts() {
+  const { threshold } = getFilters();
+  const filtered = applyFilters(alertsData).filter(r => r.cpa_change_pct_display >= threshold);
+  const el = document.getElementById('alertList');
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty-state">✅ Aucun ad group au-dessus du seuil de +${threshold}%</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const pct = r.cpa_change_pct_display;
+    const sev = pct >= 75 ? 'critical' : pct >= 50 ? 'high' : 'medium';
+    const emoji = pct >= 75 ? '🔴' : pct >= 50 ? '🟠' : '🟡';
+    const pIcon = r.platform === 'iOS' ? '🍎' : '🤖';
+    return `
+    <div class="alert-card ${sev}">
+      <div>
+        <div class="alert-top">
+          <span class="tag">${r.app}</span>
+          <span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>
+          <span class="tag">${r.result_label}</span>
+          <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
+        </div>
+        <div class="adgroup-name">${r.adgroup}</div>
+      </div>
+      <div class="alert-cpa">
+        <div class="cpa-change ${sev}">${emoji} +${pct}%</div>
+        <div class="cpa-detail">$${r.cpa_yesterday.toFixed(2)} → $${r.cpa_today.toFixed(2)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTable() {
+  const filtered = applyFilters(dodData);
+  const tbody = document.getElementById('dodTable');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Aucune donnée</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
+    const pct = r.cpa_change_pct;
+    const cls = changeClass(pct);
+    const sign = pct >= 0 ? '+' : '';
+    return `<tr>
+      <td>${r.app}</td>
+      <td>${platformBadge(r.platform)}</td>
+      <td style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.adgroup}">${r.adgroup}</td>
+      <td style="color:var(--muted)">${r.result_label}</td>
+      <td>$${Math.round(r.cost_today)}</td>
+      <td>${Math.round(r.result_today)}</td>
+      <td>$${r.cpa_today.toFixed(2)}</td>
+      <td style="color:var(--muted)">$${r.cpa_yesterday.toFixed(2)}</td>
+      <td class="change-cell ${cls}">${sign}${pct.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderKPIs() {
+  const f = getFilters();
+  const filteredAlerts = applyFilters(alertsData).filter(r => r.cpa_change_pct_display >= f.threshold);
+  const filteredDod = applyFilters(dodData);
+  const avgChange = filteredDod.length > 0
+    ? filteredDod.reduce((s, r) => s + r.cpa_change_pct, 0) / filteredDod.length
+    : 0;
+
+  document.getElementById('kpiAlerts').textContent = filteredAlerts.length;
+  document.getElementById('kpiAdgroups').textContent = filteredDod.length;
+  const avgEl = document.getElementById('kpiAvgChange');
+  avgEl.textContent = `${avgChange >= 0 ? '+' : ''}${avgChange.toFixed(1)}%`;
+  avgEl.className = 'kpi-value ' + (avgChange > 10 ? 'red' : avgChange < -5 ? 'green' : '');
+}
+
+function renderAll() {
+  renderKPIs();
+  renderAlerts();
+  renderTable();
+}
+
+async function loadTrend() {
+  const res = await fetch('/api/trend');
+  const rows = await res.json();
+  if (!rows.length || rows.error) return;
+
+  const apps = [...new Set(rows.map(r => r.app))];
+  const days  = [...new Set(rows.map(r => r.day))].sort();
+  const colors = { Harmony: '#a78bfa', Stashcook: '#f87171', Unchaind: '#2dd4bf' };
+
+  const datasets = apps.map(app => ({
+    label: app,
+    data: days.map(d => {
+      const r = rows.find(x => x.app === app && x.day === d);
+      return r ? r.cpa : null;
+    }),
+    borderColor: colors[app] || '#60a5fa',
+    backgroundColor: colors[app] || '#60a5fa',
+    tension: 0.3,
+    pointRadius: 4,
+    spanGaps: true,
+  }));
+
+  if (trendChart) trendChart.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: days, datasets },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#e8eaf0' } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: $${c.parsed.y.toFixed(2)}` } },
+      },
+      scales: {
+        x: { ticks: { color: '#7b7f96' }, grid: { color: '#2a2d3a' } },
+        y: { ticks: { color: '#7b7f96', callback: v => '$' + v }, grid: { color: '#2a2d3a' } },
+      },
+    },
+  });
+}
+
+async function loadData() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('loading');
+  btn.textContent = '⏳ Chargement...';
+  document.getElementById('errorBanner').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/alerts');
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    alertsData = data.alerts || [];
+    dodData = data.dod || [];
+
+    // Dates
+    if (data.dates?.today) {
+      document.getElementById('dates').innerHTML =
+        `<strong>${data.dates.today}</strong> vs <strong>${data.dates.prev}</strong>`;
+    }
+    document.getElementById('kpiUpdated').textContent = data.updated_at || '—';
+
+    renderAll();
+    await loadTrend();
+  } catch (e) {
+    document.getElementById('errorBanner').textContent = '⚠️ Erreur : ' + e.message;
+    document.getElementById('errorBanner').style.display = 'block';
+  }
+
+  btn.classList.remove('loading');
+  btn.textContent = '🔄 Refresh';
+}
+
+// Initial load
+loadData();
+</script>
+</body>
+</html>
