@@ -32,7 +32,7 @@ def api_alerts():
 
         # Ajoute le lien vers l'ad manager pour chaque alerte
         for row in alerts_list:
-            row["network_link"] = build_network_url(row["campaign"], row["adgroup"])
+            row["network_link"] = build_network_url(row["campaign"], row["adgroup"], row["app"])
 
         dod_list = dod[[
             "app", "platform", "campaign", "adgroup",

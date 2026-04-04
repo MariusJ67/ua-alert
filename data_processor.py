@@ -26,19 +26,28 @@ def _detect_network(campaign: str) -> str:
     return "unknown"
 
 
-def build_network_url(campaign: str, adgroup: str) -> dict:
+META_ACCOUNT_IDS = {
+    "harmony":   "1440546603639114",  # Lifestyle Web
+    "stashcook": "1904582206865362",  # Stashcook Roca
+    "unchaind":  "820328104370565",   # Unchaind Roca2
+}
+
+
+def build_network_url(campaign: str, adgroup: str, app: str = "") -> dict:
     """Build a direct link to the ad manager for a given campaign/adgroup."""
     network = _detect_network(campaign)
     adgroup_id = _extract_id(adgroup)
     campaign_id = _extract_id(campaign)
 
     if network == "meta":
+        act = META_ACCOUNT_IDS.get(app.lower(), "")
+        act_param = f"act={act}&" if act else ""
         if adgroup_id:
-            url = f"https://adsmanager.facebook.com/adsmanager/manage/adsets?selected_adset_ids={adgroup_id}"
+            url = f"https://adsmanager.facebook.com/adsmanager/manage/adsets?{act_param}selected_adset_ids={adgroup_id}"
         elif campaign_id:
-            url = f"https://adsmanager.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids={campaign_id}"
+            url = f"https://adsmanager.facebook.com/adsmanager/manage/campaigns?{act_param}selected_campaign_ids={campaign_id}"
         else:
-            url = "https://adsmanager.facebook.com/"
+            url = f"https://adsmanager.facebook.com/adsmanager/manage/campaigns?{act_param}"
         label = "Meta Ads Manager"
         icon = "🔵"
 
