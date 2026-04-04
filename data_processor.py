@@ -183,6 +183,11 @@ def get_low_creative_alerts(df_creatives: pd.DataFrame) -> pd.DataFrame:
     if df_creatives.empty:
         return pd.DataFrame()
 
+    # Exclure les adgroups "text" (text ads, pas de créas visuelles)
+    df_creatives = df_creatives[
+        ~df_creatives["adgroup"].str.lower().str.contains("text", na=False)
+    ]
+
     # Dernier jour avec du spend
     days_with_spend = (
         df_creatives[df_creatives["cost"] >= 1]
