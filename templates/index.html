@@ -142,6 +142,23 @@
       border-radius: 12px; padding: 24px;
     }
 
+    /* Toggle chart */
+    .btn-toggle {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); padding: 4px 10px; border-radius: 6px;
+      cursor: pointer; font-size: 12px; margin-top: 8px;
+      transition: all 0.15s;
+    }
+    .btn-toggle:hover { border-color: var(--purple); color: var(--purple); }
+    .btn-toggle.active { border-color: var(--purple); color: var(--purple); background: rgba(167,139,250,0.1); }
+    .adgroup-chart-wrap {
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: none;
+    }
+    .adgroup-chart-wrap.open { display: block; }
+    .chart-loading { font-size: 12px; color: var(--muted); }
+
     /* Ads link */
     .ads-link {
       display: inline-block; margin-top: 8px;
@@ -326,26 +343,44 @@ function renderAlerts() {
     return;
   }
 
-  el.innerHTML = filtered.map(r => {
+  el.innerHTML = filtered.map((r, i) => {
     const pct = r.cpa_change_pct_display;
     const sev = pct >= 75 ? 'critical' : pct >= 50 ? 'high' : 'medium';
     const emoji = pct >= 75 ? '🔴' : pct >= 50 ? '🟠' : '🟡';
     const pIcon = r.platform === 'iOS' ? '🍎' : '🤖';
+    const chartId = `chart-alert-${i}`;
     return `
     <div class="alert-card ${sev}">
-      <div>
-        <div class="alert-top">
-          <span class="tag">${r.app}</span>
-          <span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>
-          <span class="tag">${r.result_label}</span>
-          <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
+      <div style="width:100%">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+          <div style="flex:1;min-width:0">
+            <div class="alert-top">
+              <span class="tag">${r.app}</span>
+              <span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>
+              <span class="tag">${r.result_label}</span>
+              <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
+            </div>
+            <div class="adgroup-name">${r.adgroup}</div>
+          </div>
+          <div class="alert-cpa" style="text-align:right;flex-shrink:0">
+            <div class="cpa-change ${sev}">${emoji} +${pct}%</div>
+            <div class="cpa-detail">$${r.cpa_yesterday.toFixed(2)} → $${r.cpa_today.toFixed(2)}</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap">
+              ${r.network_link?.url ? `<a class="ads-link" href="${r.network_link.url}" target="_blank" rel="noopener">${r.network_link.icon} ${r.network_link.label} ↗</a>` : ''}
+              <button class="btn-toggle" id="btn-${chartId}"
+                data-chart="${chartId}"
+                data-app="${r.app.toLowerCase()}"
+                data-campaign="${encodeURIComponent(r.campaign)}"
+                data-adgroup="${encodeURIComponent(r.adgroup)}"
+                onclick="toggleChart(this)">
+                📈 Tendance 7j
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="adgroup-name">${r.adgroup}</div>
-      </div>
-      <div class="alert-cpa">
-        <div class="cpa-change ${sev}">${emoji} +${pct}%</div>
-        <div class="cpa-detail">$${r.cpa_yesterday.toFixed(2)} → $${r.cpa_today.toFixed(2)}</div>
-        ${r.network_link?.url ? `<a class="ads-link" href="${r.network_link.url}" target="_blank" rel="noopener">${r.network_link.icon} ${r.network_link.label} ↗</a>` : ''}
+        <div class="adgroup-chart-wrap" id="${chartId}">
+          <div class="chart-loading">Chargement...</div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -471,6 +506,102 @@ async function loadData() {
 
   btn.classList.remove('loading');
   btn.textContent = '🔄 Refresh';
+}
+
+// ── Adgroup trend toggle ─────────────────────────────────────────────────────
+const adgroupCharts = {};  // chartId → Chart instance
+
+async function toggleChart(btn) {
+  const chartId = btn.dataset.chart;
+  const wrap = document.getElementById(chartId);
+  const isOpen = wrap.classList.contains('open');
+
+  if (isOpen) {
+    wrap.classList.remove('open');
+    btn.classList.remove('active');
+    btn.textContent = '📈 Tendance 7j';
+    return;
+  }
+
+  wrap.classList.add('open');
+  btn.classList.add('active');
+  btn.textContent = '📈 Fermer';
+
+  // Already loaded
+  if (adgroupCharts[chartId]) return;
+
+  const appName  = btn.dataset.app;
+  const campaign = decodeURIComponent(btn.dataset.campaign);
+  const adgroup  = decodeURIComponent(btn.dataset.adgroup);
+
+  wrap.innerHTML = '<div class="chart-loading"><div class="spinner"></div> Chargement...</div>';
+
+  try {
+    const params = new URLSearchParams({ app: appName, campaign, adgroup });
+    const res = await fetch(`/api/adgroup_trend?${params}`);
+    const points = await res.json();
+
+    if (!Array.isArray(points) || points.length === 0) {
+      wrap.innerHTML = '<div class="chart-loading" style="color:var(--muted)">Pas de données sur 7 jours.</div>';
+      return;
+    }
+
+    const canvasId = `canvas-${chartId}`;
+    wrap.innerHTML = `<canvas id="${canvasId}" height="80"></canvas>`;
+
+    const labels = points.map(p => p.day);
+    const cpas   = points.map(p => p.cpa);
+    const costs  = points.map(p => p.cost);
+
+    // Highlight last point (most recent)
+    const pointColors = cpas.map((_, idx) =>
+      idx === cpas.length - 1 ? '#a78bfa' : 'rgba(167,139,250,0.5)'
+    );
+    const pointSizes = cpas.map((_, idx) => idx === cpas.length - 1 ? 6 : 4);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    adgroupCharts[chartId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'CPA ($)',
+          data: cpas,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.08)',
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: pointColors,
+          pointRadius: pointSizes,
+          pointHoverRadius: 7,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const pt = points[ctx.dataIndex];
+                return [`CPA: $${ctx.parsed.y.toFixed(2)}`, `Spend: $${pt.cost}`, `Résultats: ${pt.result}`];
+              }
+            }
+          },
+        },
+        scales: {
+          x: { ticks: { color: '#7b7f96', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+          y: {
+            ticks: { color: '#7b7f96', callback: v => '$' + v, font: { size: 11 } },
+            grid: { color: '#2a2d3a' },
+          },
+        },
+      },
+    });
+
+  } catch (e) {
+    wrap.innerHTML = `<div class="chart-loading" style="color:var(--red)">Erreur: ${e.message}</div>`;
+  }
 }
 
 // Initial load

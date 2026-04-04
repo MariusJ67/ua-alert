@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, render_template
-from adjust_client import fetch_last_two_days, fetch_last_n_days
+from flask import Flask, jsonify, render_template, request
+from adjust_client import fetch_last_two_days, fetch_last_n_days, fetch_all_apps
 from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from config import APP_CONFIGS
 
 app = Flask(__name__)
 
@@ -69,6 +70,63 @@ def api_trend():
         )
         trend["day"] = trend["day"].astype(str)
         return jsonify(trend.to_dict(orient="records"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/adgroup_trend")
+def api_adgroup_trend():
+    """
+    Retourne le CPA jour par jour sur 7 jours pour un adgroup spécifique.
+    Params: app, campaign, adgroup
+    """
+    try:
+        app_name = request.args.get("app", "").lower()
+        campaign = request.args.get("campaign", "")
+        adgroup  = request.args.get("adgroup", "")
+
+        if not all([app_name, campaign, adgroup]):
+            return jsonify({"error": "app, campaign, adgroup requis"}), 400
+
+        cfg = APP_CONFIGS.get(app_name)
+        if not cfg:
+            return jsonify({"error": f"App inconnue: {app_name}"}), 400
+
+        # Fetch 8 jours pour avoir J-1 comme dernier jour (délai Adjust)
+        today = date.today()
+        start = today - timedelta(days=8)
+        yesterday = today - timedelta(days=1)
+        df = fetch_all_apps(str(start), str(yesterday))
+
+        if df.empty:
+            return jsonify([])
+
+        # Filtrer sur l'adgroup exact
+        df = compute_cpa(df)
+        mask = (
+            (df["app"].str.lower() == app_name) &
+            (df["campaign"] == campaign) &
+            (df["adgroup"] == adgroup)
+        )
+        adgroup_df = df[mask].copy()
+
+        if adgroup_df.empty:
+            return jsonify([])
+
+        # Construire la série jour par jour
+        adgroup_df = adgroup_df.sort_values("day")
+        points = []
+        for _, row in adgroup_df.iterrows():
+            if row["cost"] > 0:
+                points.append({
+                    "day": str(row["day"]),
+                    "cpa": round(float(row["cpa"]), 2) if row["cpa"] is not None else None,
+                    "cost": round(float(row["cost"]), 2),
+                    "result": int(row["result"]),
+                })
+
+        return jsonify(points)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
