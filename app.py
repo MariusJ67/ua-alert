@@ -152,8 +152,8 @@ def api_creative_breakdown():
         merged["creative_name"] = merged["creative"].apply(clean_name)
         merged["creative_full"] = merged["creative"]
 
-        # Trier par CPA aujourd'hui décroissant
-        merged = merged.sort_values("cpa_today", ascending=False, na_position="last")
+        # Trier par spend aujourd'hui décroissant
+        merged = merged.sort_values("cost_today", ascending=False, na_position="last")
 
         import math
 
