@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, render_template, request
-from adjust_client import fetch_last_two_days, fetch_last_n_days, fetch_all_apps, fetch_creative_breakdown
-from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url
+from adjust_client import fetch_last_two_days, fetch_last_n_days, fetch_all_apps, fetch_creative_breakdown, fetch_all_apps_with_creatives
+from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url, get_low_creative_alerts
 from datetime import datetime, date, timedelta
 from config import APP_CONFIGS
 
@@ -43,8 +43,28 @@ def api_alerts():
         dod_list["cpa_change_pct"] = (dod_list["cpa_change_pct"] * 100).round(1)
         dod_list = dod_list.to_dict(orient="records")
 
+        # ── Low creative alerts ──────────────────────────────────────────
+        today = date.today()
+        start_crea = today - timedelta(days=3)
+        df_crea = fetch_all_apps_with_creatives(str(start_crea), str(today - timedelta(days=1)))
+        low_crea_alerts = get_low_creative_alerts(df_crea)
+
+        low_crea_list = []
+        if not low_crea_alerts.empty:
+            for _, row in low_crea_alerts.iterrows():
+                low_crea_list.append({
+                    "app":                  row["app"],
+                    "campaign":             row["campaign"],
+                    "adgroup":              row["adgroup"],
+                    "active_creative_count": int(row["active_creative_count"]),
+                    "cost_today":           round(float(row["cost_today"]), 2),
+                    "date":                 str(row["date"]),
+                    "network_link":         build_network_url(row["campaign"], row["adgroup"], row["app"]),
+                })
+
         return jsonify({
             "alerts": alerts_list,
+            "low_creative_alerts": low_crea_list,
             "dod": dod_list,
             "dates": {"today": date_today, "prev": date_prev},
             "updated_at": datetime.now().strftime("%H:%M"),

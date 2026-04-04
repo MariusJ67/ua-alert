@@ -91,6 +91,46 @@ def fetch_all_apps(start_date: str, end_date: str) -> pd.DataFrame:
     return combined.reset_index(drop=True)
 
 
+def fetch_all_apps_with_creatives(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Same as fetch_all_apps but includes the creative dimension.
+    Used to count active creatives per adgroup.
+    """
+    frames = []
+    for app_key, cfg in APP_CONFIGS.items():
+        headers = {
+            "Authorization": f"Bearer {ADJUST_API_TOKEN}",
+            "Accept": "application/json",
+        }
+        params = {
+            "date_period": f"{start_date}:{end_date}",
+            "dimensions": "campaign,adgroup,creative,day",
+            "metrics": f"cost,{cfg['result_metric']}",
+            "utc_offset": "+00:00",
+            "currency": "USD",
+            "app_token__in": cfg["app_token"],
+        }
+        response = requests.get(ADJUST_BASE_URL, headers=headers, params=params)
+        if response.status_code != 200:
+            continue
+        rows = response.json().get("rows", [])
+        df = pd.DataFrame(rows)
+        if df.empty:
+            continue
+        df.rename(columns={cfg["result_metric"]: "result"}, inplace=True)
+        for col in ["cost", "result"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        df["day"] = pd.to_datetime(df["day"]).dt.date
+        df["app"] = app_key.capitalize()
+        # Filter test adgroups
+        df = df[~df["adgroup"].str.lower().str.contains("test", na=False)]
+        frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
 def fetch_creative_breakdown(app_token: str, result_metric: str,
                              campaign: str, adgroup: str,
                              start_date: str, end_date: str) -> pd.DataFrame:

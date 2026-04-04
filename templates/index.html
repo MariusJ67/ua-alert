@@ -283,6 +283,14 @@
     <div id="alertList"><div class="spinner"></div></div>
   </section>
 
+  <!-- Low creative alerts -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">🎨 Alertes créas — adgroups avec ≤ 5 créas actives</div>
+    </div>
+    <div id="lowCreativeList"><div class="spinner"></div></div>
+  </section>
+
   <!-- Table -->
   <section>
     <div class="section-header">
@@ -322,6 +330,7 @@
 <script>
 let alertsData = [];
 let dodData = [];
+let lowCreativeData = [];
 let trendChart = null;
 
 function getFilters() {
@@ -461,9 +470,51 @@ function renderKPIs() {
   avgEl.className = 'kpi-value ' + (avgChange > 10 ? 'red' : avgChange < -5 ? 'green' : '');
 }
 
+function renderLowCreatives() {
+  const el = document.getElementById('lowCreativeList');
+  const filtered = applyFilters(lowCreativeData);
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty-state">✅ Tous les adgroups actifs ont plus de 5 créas</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const count = r.active_creative_count;
+    const cssClass = count <= 2 ? 'critical' : count <= 3 ? 'high' : 'medium';
+    const emoji    = count <= 2 ? '🔴' : count <= 3 ? '🟠' : '🟡';
+    const platformMatch = r.campaign.toUpperCase().includes('_IOS_') ? 'iOS' : r.campaign.toUpperCase().includes('_AND_') ? 'Android' : '';
+    const pIcon = platformMatch === 'iOS' ? '🍎' : platformMatch === 'Android' ? '🤖' : '';
+
+    return `
+    <div class="alert-card ${cssClass}">
+      <div style="width:100%">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+          <div style="flex:1;min-width:0">
+            <div class="alert-top">
+              <span class="tag">${r.app}</span>
+              ${platformMatch ? `<span class="tag ${platformMatch === 'iOS' ? 'ios' : 'and'}">${pIcon} ${platformMatch}</span>` : ''}
+              <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
+            </div>
+            <div class="adgroup-name">${r.adgroup}</div>
+          </div>
+          <div class="alert-cpa" style="text-align:right;flex-shrink:0;margin-left:16px">
+            <div class="cpa-change ${cssClass}" style="font-size:18px">${emoji} ${count} créa${count > 1 ? 's' : ''}</div>
+            <div class="cpa-detail">actives le ${r.date}</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap">
+              ${r.network_link?.url ? `<a class="ads-link" href="${r.network_link.url}" target="_blank" rel="noopener">${r.network_link.icon} ${r.network_link.label} ↗</a>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderAll() {
   renderKPIs();
   renderAlerts();
+  renderLowCreatives();
   renderTable();
 }
 
@@ -522,6 +573,7 @@ async function loadData() {
 
     alertsData = data.alerts || [];
     dodData = data.dod || [];
+    lowCreativeData = data.low_creative_alerts || [];
 
     // Dates
     if (data.dates?.today) {

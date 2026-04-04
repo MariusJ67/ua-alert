@@ -172,6 +172,65 @@ def get_alerts(df_dod: pd.DataFrame) -> pd.DataFrame:
     return alerts
 
 
+LOW_CREATIVE_THRESHOLD = 5  # alerte si <= N créas actives
+
+
+def get_low_creative_alerts(df_creatives: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retourne les adgroups actifs (spend > MIN_SPEND_FOR_ALERT) qui ont
+    5 créas actives ou moins sur le dernier jour avec du spend.
+    """
+    if df_creatives.empty:
+        return pd.DataFrame()
+
+    # Dernier jour avec du spend
+    days_with_spend = (
+        df_creatives[df_creatives["cost"] >= 1]
+        .groupby("day")["cost"].sum()
+        .sort_index(ascending=False)
+    )
+    if days_with_spend.empty:
+        return pd.DataFrame()
+
+    latest_day = days_with_spend.index[0]
+    df_day = df_creatives[df_creatives["day"] == latest_day].copy()
+
+    # Adgroups actifs (spend suffisant)
+    adgroup_spend = df_day.groupby(["app", "campaign", "adgroup"])["cost"].sum()
+    active_adgroups = adgroup_spend[adgroup_spend >= MIN_SPEND_FOR_ALERT].index
+
+    # Compter les créas actives (cost > 0) par adgroup
+    active_creatives = (
+        df_day[df_day["cost"] > 0]
+        .groupby(["app", "campaign", "adgroup"])["creative"]
+        .nunique()
+        .reset_index(name="active_creative_count")
+    )
+
+    # Garder seulement les adgroups actifs
+    active_creatives = active_creatives[
+        active_creatives.set_index(["app", "campaign", "adgroup"]).index.isin(active_adgroups)
+    ].copy()
+
+    # Filtrer ceux avec <= seuil
+    alerts = active_creatives[
+        active_creatives["active_creative_count"] <= LOW_CREATIVE_THRESHOLD
+    ].copy()
+
+    if alerts.empty:
+        return pd.DataFrame()
+
+    # Ajouter spend et date
+    alerts = alerts.merge(
+        adgroup_spend.reset_index(name="cost_today"),
+        on=["app", "campaign", "adgroup"],
+        how="left",
+    )
+    alerts["date"] = latest_day
+
+    return alerts.sort_values("active_creative_count").reset_index(drop=True)
+
+
 if __name__ == "__main__":
     from adjust_client import fetch_last_two_days
 
