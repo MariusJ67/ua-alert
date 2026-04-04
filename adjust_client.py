@@ -59,12 +59,26 @@ def _detect_app(campaign_name: str) -> str:
     return "Unknown"
 
 
+def _is_bau(campaign: str, adgroup: str) -> bool:
+    """
+    Returns True only for BAU (Business As Usual) campaigns.
+    Excludes:
+      - Any campaign or adgroup with 'test' in the name
+      - Install-optimized campaigns (_CPI_ or _CPI_INST_)
+    """
+    c = campaign.lower()
+    a = adgroup.lower()
+    if "test" in c or "test" in a:
+        return False
+    if "_cpi_" in c:
+        return False
+    return True
+
+
 def fetch_all_apps(start_date: str, end_date: str) -> pd.DataFrame:
     """
     Fetch data for all configured apps and combine into one DataFrame.
-    Applies filters:
-      - Excludes adgroups with 'test' in name (case-insensitive)
-      - Adds platform (iOS/Android) and app name columns
+    Only keeps BAU campaigns (no test, no CPI/install-optimized).
     """
     frames = []
     for app_key, cfg in APP_CONFIGS.items():
@@ -82,10 +96,11 @@ def fetch_all_apps(start_date: str, end_date: str) -> pd.DataFrame:
     # Add platform detection
     combined["platform"] = combined["campaign"].apply(_detect_platform)
 
-    # Filter out test adgroups
-    combined = combined[~combined["adgroup"].str.lower().str.contains("test", na=False)]
+    # Keep only BAU campaigns
+    mask = combined.apply(lambda r: _is_bau(r["campaign"], r["adgroup"]), axis=1)
+    combined = combined[mask]
 
-    # Filter out adgroups from unknown app (shouldn't happen but safety net)
+    # Filter out adgroups from unknown app
     combined = combined[combined["app"] != "Unknown"]
 
     return combined.reset_index(drop=True)
@@ -122,8 +137,9 @@ def fetch_all_apps_with_creatives(start_date: str, end_date: str) -> pd.DataFram
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         df["day"] = pd.to_datetime(df["day"]).dt.date
         df["app"] = app_key.capitalize()
-        # Filter test adgroups
-        df = df[~df["adgroup"].str.lower().str.contains("test", na=False)]
+        # Keep only BAU campaigns
+        mask = df.apply(lambda r: _is_bau(r["campaign"], r["adgroup"]), axis=1)
+        df = df[mask]
         frames.append(df)
 
     if not frames:
