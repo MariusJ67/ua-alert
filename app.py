@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, render_template, request
 from adjust_client import fetch_last_two_days, fetch_last_n_days, fetch_all_apps, fetch_creative_breakdown, fetch_all_apps_with_creatives
-from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url, get_low_creative_alerts, detect_country_flag
+from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url, get_low_creative_alerts, detect_country_flag, get_banger_alerts
 from datetime import datetime, date, timedelta
 from config import APP_CONFIGS
 
@@ -64,9 +64,13 @@ def api_alerts():
                     "country_flag":         detect_country_flag(row["adgroup"], row["campaign"]),
                 })
 
+        # ── Banger alerts ────────────────────────────────────────────────
+        banger_alerts = get_banger_alerts(df_crea)
+
         return jsonify({
             "alerts": alerts_list,
             "low_creative_alerts": low_crea_list,
+            "banger_alerts": banger_alerts,
             "dod": dod_list,
             "dates": {"today": date_today, "prev": date_prev},
             "updated_at": datetime.now().strftime("%H:%M"),

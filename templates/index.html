@@ -275,8 +275,8 @@
     </div>
   </div>
 
-  <!-- Alerts side by side -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px">
+  <!-- Alerts three columns -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-bottom:32px">
     <section style="margin-bottom:0">
       <div class="section-header">
         <div class="section-title">🚨 Alertes CPA</div>
@@ -289,6 +289,13 @@
         <div class="section-title">🎨 Alertes créas ≤ 5 actives</div>
       </div>
       <div id="lowCreativeList"><div class="spinner"></div></div>
+    </section>
+
+    <section style="margin-bottom:0">
+      <div class="section-header">
+        <div class="section-title">🔥 Banger Alert</div>
+      </div>
+      <div id="bangerList"><div class="spinner"></div></div>
     </section>
   </div>
 
@@ -332,6 +339,7 @@
 let alertsData = [];
 let dodData = [];
 let lowCreativeData = [];
+let bangerData = [];
 let trendChart = null;
 
 function getFilters() {
@@ -514,10 +522,57 @@ function renderLowCreatives() {
   }).join('');
 }
 
+function renderBangers() {
+  const el = document.getElementById('bangerList');
+  const filtered = applyFilters(bangerData);
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="color:var(--muted)">Aucun banger détecté aujourd'hui</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const pIcon = r.platform === 'iOS' ? '🍎' : r.platform === 'Android' ? '🤖' : '';
+    const savings = r.adgroup_cpa > 0
+      ? Math.round((1 - r.creative_cpa / r.adgroup_cpa) * 100)
+      : 0;
+
+    return `
+    <div class="alert-card" style="border-left-color:#f59e0b;background:rgba(245,158,11,0.08)">
+      <div style="width:100%">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div class="alert-top">
+              <span class="tag">${r.app}</span>
+              ${r.platform ? `<span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>` : ''}
+              ${r.country_flag ? `<span style="font-size:18px">${r.country_flag}</span>` : ''}
+            </div>
+            <div class="adgroup-name" style="margin-top:4px;font-weight:600;color:var(--text)">🎨 ${r.creative_name}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.adgroup}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:20px;font-weight:700;color:#f59e0b">🔥 ${r.spend_share}%</div>
+            <div style="font-size:11px;color:var(--muted)">du spend adgroup</div>
+            <div style="margin-top:6px;font-size:13px">
+              CPA <strong style="color:#22c55e">$${r.creative_cpa}</strong>
+              <span style="color:var(--muted)"> vs $${r.adgroup_cpa} moy.</span>
+            </div>
+            <div style="font-size:11px;color:#22c55e;font-weight:600">-${savings}% vs adgroup</div>
+            <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap">
+              ${r.network_link?.url ? `<a class="ads-link" href="${r.network_link.url}" target="_blank" rel="noopener">${r.network_link.icon} ${r.network_link.label} ↗</a>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderAll() {
   renderKPIs();
   renderAlerts();
   renderLowCreatives();
+  renderBangers();
   renderTable();
 }
 
@@ -577,6 +632,7 @@ async function loadData() {
     alertsData = data.alerts || [];
     dodData = data.dod || [];
     lowCreativeData = data.low_creative_alerts || [];
+    bangerData = data.banger_alerts || [];
 
     // Dates
     if (data.dates?.today) {

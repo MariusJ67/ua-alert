@@ -278,6 +278,100 @@ def get_low_creative_alerts(df_creatives: pd.DataFrame) -> pd.DataFrame:
     return alerts.sort_values("active_creative_count").reset_index(drop=True)
 
 
+BANGER_SPEND_SHARE = 0.40   # créa qui représente > 40% du spend de l'adgroup
+BANGER_MIN_SPEND   = 20.0   # spend minimum de la créa pour être considérée
+
+
+def get_banger_alerts(df_creatives: pd.DataFrame) -> list:
+    """
+    Retourne les créas "banger" :
+      - spend > 40% du spend total de l'adgroup sur le dernier jour
+      - CPA de la créa < CPA moyen de l'adgroup ce même jour
+    """
+    if df_creatives.empty:
+        return []
+
+    # Dernier jour avec du spend
+    days_with_spend = (
+        df_creatives[df_creatives["cost"] >= 1]
+        .groupby("day")["cost"].sum()
+        .sort_index(ascending=False)
+    )
+    if days_with_spend.empty:
+        return []
+
+    latest_day = days_with_spend.index[0]
+    df_day = df_creatives[
+        (df_creatives["day"] == latest_day) & (df_creatives["cost"] > 0)
+    ].copy()
+
+    # Agrégats par adgroup
+    adgroup_stats = df_day.groupby(["app", "campaign", "adgroup"]).agg(
+        adgroup_cost=("cost", "sum"),
+        adgroup_result=("result", "sum"),
+    ).reset_index()
+    adgroup_stats = adgroup_stats[adgroup_stats["adgroup_cost"] >= MIN_SPEND_FOR_ALERT]
+    adgroup_stats["adgroup_cpa"] = adgroup_stats.apply(
+        lambda r: r["adgroup_cost"] / r["adgroup_result"] if r["adgroup_result"] > 0 else None,
+        axis=1,
+    )
+
+    # Agrégats par créa
+    creative_stats = df_day.groupby(["app", "campaign", "adgroup", "creative"]).agg(
+        creative_cost=("cost", "sum"),
+        creative_result=("result", "sum"),
+    ).reset_index()
+    creative_stats["creative_cpa"] = creative_stats.apply(
+        lambda r: r["creative_cost"] / r["creative_result"] if r["creative_result"] > 0 else None,
+        axis=1,
+    )
+
+    # Merge créas + adgroup stats
+    merged = creative_stats.merge(adgroup_stats, on=["app", "campaign", "adgroup"], how="inner")
+    merged["spend_share"] = merged["creative_cost"] / merged["adgroup_cost"]
+
+    # Filtrer : top spender ET CPA < moyenne adgroup
+    bangers = merged[
+        (merged["spend_share"] > BANGER_SPEND_SHARE)
+        & (merged["creative_cost"] >= BANGER_MIN_SPEND)
+        & (merged["creative_cpa"].notna())
+        & (merged["adgroup_cpa"].notna())
+        & (merged["creative_cpa"] < merged["adgroup_cpa"])
+    ].copy()
+
+    if bangers.empty:
+        return []
+
+    import re
+    def clean_name(name):
+        return re.sub(r'\s*\([^)]+\)\s*$', '', str(name)).strip()
+
+    bangers = bangers.sort_values("creative_cost", ascending=False)
+
+    result = []
+    for _, row in bangers.iterrows():
+        campaign = row["campaign"]
+        adgroup  = row["adgroup"]
+        result.append({
+            "app":              row["app"],
+            "platform":         "iOS" if "_IOS_" in campaign.upper() else "Android" if "_AND_" in campaign.upper() else "",
+            "campaign":         campaign,
+            "adgroup":          adgroup,
+            "creative_name":    clean_name(row["creative"]),
+            "creative_full":    row["creative"],
+            "creative_cost":    round(float(row["creative_cost"]), 2),
+            "creative_result":  int(row["creative_result"]),
+            "creative_cpa":     round(float(row["creative_cpa"]), 2),
+            "adgroup_cost":     round(float(row["adgroup_cost"]), 2),
+            "adgroup_cpa":      round(float(row["adgroup_cpa"]), 2),
+            "spend_share":      round(float(row["spend_share"]) * 100, 1),
+            "date":             str(latest_day),
+            "country_flag":     detect_country_flag(adgroup, campaign),
+            "network_link":     build_network_url(campaign, adgroup, row["app"]),
+        })
+    return result
+
+
 if __name__ == "__main__":
     from adjust_client import fetch_last_two_days
 
