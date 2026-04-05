@@ -547,7 +547,7 @@ function renderBangers() {
               ${r.platform ? `<span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>` : ''}
               ${r.country_flag ? `<span style="font-size:18px">${r.country_flag}</span>` : ''}
             </div>
-            <div class="adgroup-name" style="margin-top:4px;font-weight:600;color:var(--text)">🎨 ${r.creative_name}</div>
+            <div style="margin-top:4px">🎨 <span class="creative-name" title="${r.creative_full}" style="font-weight:600;color:var(--text);display:inline-block;max-width:240px;vertical-align:bottom">${r.creative_name}</span></div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.adgroup}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
