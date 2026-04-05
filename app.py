@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, render_template, request
 from adjust_client import fetch_last_two_days, fetch_last_n_days, fetch_all_apps, fetch_creative_breakdown, fetch_all_apps_with_creatives
-from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url, get_low_creative_alerts
+from data_processor import compute_day_over_day, get_alerts, compute_cpa, build_network_url, get_low_creative_alerts, detect_country_flag
 from datetime import datetime, date, timedelta
 from config import APP_CONFIGS
 
@@ -31,9 +31,10 @@ def api_alerts():
             "cpa_today", "cpa_yesterday", "cpa_change_pct_display"
         ]].to_dict(orient="records")
 
-        # Ajoute le lien vers l'ad manager pour chaque alerte
+        # Ajoute le lien ad manager et le drapeau pays pour chaque alerte CPA
         for row in alerts_list:
-            row["network_link"] = build_network_url(row["campaign"], row["adgroup"], row["app"])
+            row["network_link"]   = build_network_url(row["campaign"], row["adgroup"], row["app"])
+            row["country_flag"]   = detect_country_flag(row["adgroup"], row["campaign"])
 
         dod_list = dod[[
             "app", "platform", "campaign", "adgroup",
@@ -60,6 +61,7 @@ def api_alerts():
                     "cost_today":           round(float(row["cost_today"]), 2),
                     "date":                 str(row["date"]),
                     "network_link":         build_network_url(row["campaign"], row["adgroup"], row["app"]),
+                    "country_flag":         detect_country_flag(row["adgroup"], row["campaign"]),
                 })
 
         return jsonify({

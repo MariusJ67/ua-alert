@@ -389,6 +389,7 @@ function renderAlerts() {
             <div class="alert-top">
               <span class="tag">${r.app}</span>
               <span class="tag ${r.platform === 'iOS' ? 'ios' : 'and'}">${pIcon} ${r.platform}</span>
+              ${r.country_flag ? `<span style="font-size:18px" title="Pays">${r.country_flag}</span>` : ''}
               <span class="tag">${r.result_label}</span>
               <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
             </div>
@@ -495,6 +496,7 @@ function renderLowCreatives() {
             <div class="alert-top">
               <span class="tag">${r.app}</span>
               ${platformMatch ? `<span class="tag ${platformMatch === 'iOS' ? 'ios' : 'and'}">${pIcon} ${platformMatch}</span>` : ''}
+              ${r.country_flag ? `<span style="font-size:18px" title="Pays">${r.country_flag}</span>` : ''}
               <span style="font-size:13px;color:var(--muted)">Spend: $${Math.round(r.cost_today)}</span>
             </div>
             <div class="adgroup-name">${r.adgroup}</div>

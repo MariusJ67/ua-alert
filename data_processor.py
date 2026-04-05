@@ -26,6 +26,48 @@ def _detect_network(campaign: str) -> str:
     return "unknown"
 
 
+COUNTRY_FLAGS = {
+    "US": "🇺🇸", "FR": "🇫🇷", "GB": "🇬🇧", "AU": "🇦🇺", "CA": "🇨🇦",
+    "DE": "🇩🇪", "NL": "🇳🇱", "ES": "🇪🇸", "CH": "🇨🇭", "NZ": "🇳🇿",
+    "MX": "🇲🇽", "BR": "🇧🇷", "IT": "🇮🇹", "SE": "🇸🇪", "NO": "🇳🇴",
+    "DK": "🇩🇰", "FI": "🇫🇮", "BE": "🇧🇪", "AT": "🇦🇹", "PT": "🇵🇹",
+    "PL": "🇵🇱", "JP": "🇯🇵", "KR": "🇰🇷", "IN": "🇮🇳", "SG": "🇸🇬",
+    "AE": "🇦🇪", "ZA": "🇿🇦", "NG": "🇳🇬", "AR": "🇦🇷", "CO": "🇨🇴",
+    # Multi-country / regions
+    "EUR": "🇪🇺", "EU": "🇪🇺",
+    "WW": "🌍", "WORLD": "🌍", "WORLDWIDE": "🌍", "GLOBAL": "🌍",
+    "T1": "🌍", "T2": "🌍",
+    "NORDICS": "🇸🇪", "NORDIC": "🇸🇪",
+    "FRANCOPHONE": "🇫🇷", "FRANCA": "🇫🇷",
+    "LATAM": "🌎", "MENA": "🌍", "SEA": "🌏",
+    "DACH": "🇩🇪",
+}
+
+
+def detect_country_flag(adgroup: str, campaign: str) -> str:
+    """
+    Detects country from adgroup name first, then campaign name.
+    Returns the matching flag emoji, or empty string if not found.
+    """
+    import re
+
+    def find_flag(text: str) -> str:
+        text_upper = text.upper()
+
+        # Check multi-word regions first (longer matches take priority)
+        for key in sorted(COUNTRY_FLAGS, key=len, reverse=True):
+            # Match as a standalone token surrounded by _, space, (, ) or start/end
+            pattern = r'(?<![A-Z])' + re.escape(key) + r'(?![A-Z])'
+            if re.search(pattern, text_upper):
+                return COUNTRY_FLAGS[key]
+        return ""
+
+    flag = find_flag(adgroup)
+    if not flag:
+        flag = find_flag(campaign)
+    return flag
+
+
 META_ACCOUNT_IDS = {
     "harmony":   "1440546603639114",  # Lifestyle Web
     "stashcook": "1904582206865362",  # Stashcook Roca
