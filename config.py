@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ADJUST_API_TOKEN = os.getenv("ADJUST_API_TOKEN")
+ADJUST_API_TOKEN = (os.getenv("ADJUST_API_TOKEN") or "").strip()
 ADJUST_BASE_URL = "https://dash.adjust.com/control-center/reports-service/report"
 
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
